@@ -72,7 +72,10 @@ impl LocalIndex {
         let size = index_item.file_size;
         let contains = self.entries.contains_key(&size);
         if !contains {
-            self.entries.insert(index_item.file_size, Vec::new());
+            let mut v = Vec::new();
+            v.push(index_item.clone());
+            self.entries.insert(index_item.file_size, v);
+            return;
         }
         self.entries.get_mut(&size).unwrap().push(index_item.clone());
         self.hash_all(size);

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::io::Read;
 use std::fmt::Debug;
 use std::fs::{self, File};
 use std::hash::Hasher;
@@ -16,49 +18,71 @@ use crc32fast;
 #[derive(Clone)]
 pub struct IndexItem {
     file_path: String,
-    file_size: u32,
+    file_size: u64,
     hash: u64,
-    hash_stopped_at: u32,
+    hash_stopped_at: u64,
     last_modified: SystemTime,
 }
 
+impl IndexItem {
+    pub fn new(file_path: String) -> Self {
+        let file = File::open(&file_path).expect("Invalid file path");
+        let metadata = file.metadata().unwrap();
+        assert_eq!(metadata.is_file(), true);
+        IndexItem {
+            file_path,
+            file_size: metadata.len(),
+            hash: 0,
+            hash_stopped_at: 0,
+            last_modified: metadata.modified().expect("Your OS does not support 'last modified' metadata"),
+        }
+    }
+}
+
 /// Data structure representing the local file index
-/// on this node. The LocalIndex will always be sorted by
-/// `file_size` so we can perform O(log(n)) lookups for
-/// the most common type of indexing collision: files that
-/// have the same size.
+/// on this node.
 /// 
 /// Do we also want to keep the items together by `file_size` sorted by
 /// another field like `hash_stopped_at`?
 pub struct LocalIndex {
-    entries: Vec<IndexItem>,
+    entries: HashMap<u64, Vec<IndexItem>>,
 }
 
 impl LocalIndex {
     pub fn new() -> Self {
         LocalIndex {
-            entries: Vec::new(),
+            entries: HashMap::new(),
         }
     }
 
-    pub fn put(&mut self, index_item: &IndexItem) {
-        match self.entries.binary_search_by_key(&index_item.file_size, |item| item.file_size) {
-            Ok(other_index) => {
-                let other_entry = self.entries.get(other_index).unwrap().to_owned();
-                self.resolve_size_collision(index_item, &other_entry);
-                self.entries.insert(other_index, index_item.clone());
+    pub fn index(&mut self, path: &str) {
+        println!("Indexing {:?}", path);
+        let file = File::open(path).expect("Invalid file path");
+        if file.metadata().unwrap().is_dir() {
+            for entry_result in fs::read_dir(path).unwrap() {
+                let entry = entry_result.unwrap();
+                self.index(&entry.path().to_string_lossy().to_string())
             }
-            Err(index) => self.entries.insert(index, index_item.clone()),
+        } else {
+            self.put(&IndexItem::new(path.to_string()))
         }
     }
 
-    fn resolve_size_collision(&mut self, item: &IndexItem, other: &IndexItem) {
-        assert_eq!(item.file_size, other.file_size);
-        // for now, just hash the entire file
-        if other.hash_stopped_at < other.file_size {
-            other.hash = hash_file(&other.file_path)
+    fn put(&mut self, index_item: &IndexItem) {
+        let size = index_item.file_size;
+        let contains = self.entries.contains_key(&size);
+        if !contains {
+            self.entries.insert(index_item.file_size, Vec::new());
         }
-        item.hash = hash_file(&item.file_path)
+        self.entries.get_mut(&size).unwrap().push(index_item.clone());
+        self.hash_all(size);
+    }
+
+    fn hash_all(&mut self, size: u64) {
+        for item in self.entries.get_mut(&size).unwrap() {
+            if item.hash_stopped_at == item.file_size { continue; }
+            item.hash = hash_file(&item.file_path);
+        }
     }
 }
 

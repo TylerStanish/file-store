@@ -10,12 +10,14 @@ use inotify::{
     Inotify,
     WatchMask,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use twox_hash::XxHash64;
 use fxhash;
 use crc32fast;
 
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct IndexItem {
     file_path: String,
     file_size: u64,
@@ -44,6 +46,7 @@ impl IndexItem {
 /// 
 /// Do we also want to keep the items together by `file_size` sorted by
 /// another field like `hash_stopped_at`?
+#[derive(Serialize, Deserialize)]
 pub struct LocalIndex {
     entries: HashMap<u64, Vec<IndexItem>>,
 }
@@ -55,8 +58,11 @@ impl LocalIndex {
         }
     }
 
+    pub fn from_json(json: &str) -> Self {
+        serde_json::from_str(json).expect("Corrupted or invalid index contents")
+    }
+
     pub fn index(&mut self, path: &str) {
-        println!("Indexing {:?}", path);
         let file = File::open(path).expect("Invalid file path");
         if file.metadata().unwrap().is_dir() {
             for entry_result in fs::read_dir(path).unwrap() {
@@ -86,6 +92,10 @@ impl LocalIndex {
             if item.hash_stopped_at == item.file_size { continue; }
             item.hash = hash_file(&item.file_path);
         }
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
     }
 }
 

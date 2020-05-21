@@ -19,5 +19,6 @@ fn parse_args() {
             local_index.index(dir);
             //index::hash_file(&dir.to_string());
         }
+        println!("{}", local_index.to_json())
     }
 }

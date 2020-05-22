@@ -165,4 +165,36 @@ mod test {
             assert_eq!(index.entries.get(&size).unwrap().len(), 1);
         }
     }
+
+    #[test]
+    fn test_files_single_collision() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = LocalIndex::new();
+        let mut file1 = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut file2 = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let buf = vec![42; 1];
+        file1.write(&buf).unwrap();
+        file2.write(&buf).unwrap();
+        index.index(file1.path().to_str().unwrap());
+        index.index(file2.path().to_str().unwrap());
+
+        assert_eq!(index.entries.len(), 1);
+        assert_eq!(index.entries.get(&1).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_files_many_collisions() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = LocalIndex::new();
+        let mut files = Vec::new();
+        for _ in 0..5 {
+            let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+            let buf = vec![42; 42];
+            file.write(&buf).unwrap();
+            index.index(file.path().to_str().unwrap());
+            files.push(file);
+        }
+        assert_eq!(index.entries.len(), 1);
+        assert_eq!(index.entries.get(&42).unwrap().len(), 5);
+    }
 }

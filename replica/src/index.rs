@@ -57,10 +57,6 @@ impl LocalIndex {
         }
     }
 
-    pub fn from_json(json: &str) -> Self {
-        serde_json::from_str(json).expect("Corrupted or invalid index contents")
-    }
-
     pub fn index(&mut self, path: &str) {
         let file = File::open(path).expect("Invalid file path");
         if file.metadata().unwrap().is_dir() {
@@ -71,6 +67,14 @@ impl LocalIndex {
         } else {
             self.put(&IndexItem::new(path.to_string()))
         }
+    }
+
+    pub fn from_json(json: &str) -> Self {
+        serde_json::from_str(json).expect("Corrupted or invalid index contents")
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
     }
 
     fn put(&mut self, index_item: &IndexItem) {
@@ -91,10 +95,6 @@ impl LocalIndex {
             if item.hash_stopped_at == item.file_size { continue; }
             item.hash = hash_file(&item.file_path);
         }
-    }
-
-    pub fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap()
     }
 }
 

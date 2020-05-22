@@ -16,7 +16,7 @@ use fxhash;
 use crc32fast;
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct IndexItem {
     file_path: String,
     file_size: u64,
@@ -128,6 +128,7 @@ pub fn hash_file<P: AsRef<Path> + Debug>(path: &P) -> u64 {
 
 #[cfg(test)]
 mod test {
+    use std::io::Write;
     use tempfile;
     use super::LocalIndex;
     #[test]
@@ -145,5 +146,23 @@ mod test {
         let mut index = LocalIndex::new();
         index.index(file.path().to_str().unwrap());
         assert_eq!(index.entries.len(), 1);
+    }
+
+    #[test]
+    fn test_files_no_collision() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = LocalIndex::new();
+        let mut files = Vec::new();
+        for size in 0..5 {
+            let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+            let buf = vec![42; size];
+            file.write(&buf).unwrap();
+            index.index(file.path().to_str().unwrap());
+            files.push(file); // if we don't do this, drop() is called and will destroy the file, so we need to move it into the vec
+        }
+        assert_eq!(index.entries.len(), 5);
+        for size in 0..5 {
+            assert_eq!(index.entries.get(&size).unwrap().len(), 1);
+        }
     }
 }

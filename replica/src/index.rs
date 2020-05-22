@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::io::Read;
 use std::fmt::Debug;
 use std::fs::{self, File};
 use std::hash::Hasher;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::time::SystemTime;
 use inotify::{
@@ -11,7 +10,7 @@ use inotify::{
     WatchMask,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json;
 use twox_hash::XxHash64;
 use fxhash;
 use crc32fast;
@@ -125,4 +124,26 @@ pub fn hash_file<P: AsRef<Path> + Debug>(path: &P) -> u64 {
         reader.consume(len);
     };
     hasher.finish()
+}
+
+#[cfg(test)]
+mod test {
+    use tempfile;
+    use super::LocalIndex;
+    #[test]
+    fn smoke_test_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = LocalIndex::new();
+        index.index(dir.path().to_str().unwrap());
+        assert_eq!(index.entries.len(), 0);
+    }
+
+    #[test]
+    fn test_single_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut index = LocalIndex::new();
+        index.index(file.path().to_str().unwrap());
+        assert_eq!(index.entries.len(), 1);
+    }
 }

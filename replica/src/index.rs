@@ -94,6 +94,7 @@ impl LocalIndex {
         for item in self.entries.get_mut(&size).unwrap() {
             if item.hash_stopped_at == item.file_size { continue; }
             item.hash = hash_file(&item.file_path);
+            item.hash_stopped_at = item.file_size;
         }
     }
 }
@@ -180,6 +181,7 @@ mod test {
 
         assert_eq!(index.entries.len(), 1);
         assert_eq!(index.entries.get(&1).unwrap().len(), 2);
+        assert_eq!(index.entries.get(&1).unwrap()[0].hash_stopped_at, 1);
     }
 
     #[test]
@@ -196,5 +198,8 @@ mod test {
         }
         assert_eq!(index.entries.len(), 1);
         assert_eq!(index.entries.get(&42).unwrap().len(), 5);
+        for item in index.entries.get(&42).unwrap() {
+            assert_eq!(item.hash_stopped_at, 42);
+        }
     }
 }

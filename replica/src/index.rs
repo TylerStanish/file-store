@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::env;
 use std::fmt::Debug;
 use std::fs::{self, File};
 use std::hash::Hasher;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::time::SystemTime;
 use inotify::{
@@ -69,8 +70,51 @@ impl LocalIndex {
         }
     }
 
+    pub fn from_local() -> Self {
+        match env::home_dir() {
+            Some(h) => {
+                let mut home = h.to_owned();
+                home.push(".config");
+                home.push("file-store");
+                home.push("index.json");
+                if home.exists() {
+                    let mut s = String::new();
+                    File::open(home).unwrap().read_to_string(&mut s).unwrap();
+                    return Self::from_json(&s);
+                } else {
+                    return Self::new();
+                }
+            }
+            None => panic!("Your HOME is not specified, where do I get the local file index?")
+        };
+    }
+
     pub fn from_json(json: &str) -> Self {
         serde_json::from_str(json).expect("Corrupted or invalid index contents")
+    }
+
+    pub fn persist_local(&self) {
+        match env::home_dir() {
+            Some(h) => {
+                let mut home = h.to_owned();
+                home.push(".config");
+                home.push("file-store");
+                let home_exists = home.exists();
+                let mut full_file_path = home.clone();
+                full_file_path.push("index.json");
+                if home_exists {
+                    if full_file_path.exists() {
+                        File::open(full_file_path).unwrap().write(self.to_json().as_bytes()).unwrap();
+                    } else {
+                        File::create(full_file_path).unwrap().write(self.to_json().as_bytes()).unwrap();
+                    }
+                } else {
+                    fs::create_dir_all(home).unwrap();
+                    File::open(full_file_path).unwrap().write(self.to_json().as_bytes()).unwrap();
+                }
+            }
+            None => panic!("Your HOME is not specified, where do I get the local file index?")
+        };
     }
 
     pub fn to_json(&self) -> String {

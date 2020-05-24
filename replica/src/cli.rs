@@ -4,11 +4,11 @@ use crate::index::LocalIndex;
 pub fn run_cli() {
     let matches = parse_args();
     if let Some(matches) = matches.subcommand_matches("index").and_then(|matches| matches.values_of("directories")) {
-        let mut local_index = LocalIndex::new();
+        let mut local_index = LocalIndex::from_local();
         for dir in matches {
             local_index.index(dir);
         }
-        println!("{}", local_index.to_json())
+        local_index.persist_local();
     }
 }
 

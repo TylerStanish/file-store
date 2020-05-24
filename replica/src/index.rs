@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fmt::Debug;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::hash::Hasher;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
@@ -19,11 +19,11 @@ use crc32fast;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct IndexItem {
-    file_path: String,
-    file_size: u64,
-    hash: u64,
-    hash_stopped_at: u64,
-    last_modified: SystemTime,
+    pub file_path: String,
+    pub file_size: u64,
+    pub hash: u64,
+    pub hash_stopped_at: u64,
+    pub last_modified: SystemTime,
 }
 
 impl IndexItem {
@@ -48,7 +48,7 @@ impl IndexItem {
 /// another field like `hash_stopped_at`?
 #[derive(Serialize, Deserialize)]
 pub struct LocalIndex {
-    entries: HashMap<u64, Vec<IndexItem>>,
+    pub entries: HashMap<u64, Vec<IndexItem>>,
 }
 
 impl LocalIndex {
@@ -56,6 +56,26 @@ impl LocalIndex {
         LocalIndex {
             entries: HashMap::new(),
         }
+    }
+
+    pub fn redundancies(&self) -> Vec<Vec<IndexItem>> {
+        let mut res = Vec::new();
+        for (key, val) in &self.entries {
+            let mut set = HashSet::new();
+            let mut dups = Vec::new();
+            for index_item in val {
+                let tuple = (index_item.hash, index_item.hash_stopped_at);
+                if set.contains(&tuple) {
+                    dups.push(index_item.to_owned());
+                } else {
+                    set.insert(tuple.to_owned());
+                }
+            }
+            if !dups.is_empty() {
+                res.push(dups);
+            }
+        }
+        res
     }
 
     pub fn index(&mut self, path: &str) {
@@ -104,7 +124,7 @@ impl LocalIndex {
                 full_file_path.push("index.json");
                 if home_exists {
                     if full_file_path.exists() {
-                        File::open(full_file_path).unwrap().write(self.to_json().as_bytes()).unwrap();
+                        OpenOptions::new().write(true).create(true).truncate(true).open(full_file_path).unwrap().write(self.to_json().as_bytes()).unwrap();
                     } else {
                         File::create(full_file_path).unwrap().write(self.to_json().as_bytes()).unwrap();
                     }
@@ -113,7 +133,7 @@ impl LocalIndex {
                     File::open(full_file_path).unwrap().write(self.to_json().as_bytes()).unwrap();
                 }
             }
-            None => panic!("Your HOME is not specified, where do I get the local file index?")
+            None => panic!("Your HOME is not specified, where do I put the local file index?")
         };
     }
 

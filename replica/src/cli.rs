@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use clap::{Arg, ArgMatches, App, SubCommand};
 use crate::index::LocalIndex;
 
@@ -9,6 +10,7 @@ pub fn run_cli() {
             local_index.index(dir);
         }
         local_index.persist_local();
+        println!("{:?}", local_index.redundancies());
     }
 }
 

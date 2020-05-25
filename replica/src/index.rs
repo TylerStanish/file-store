@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fmt::Debug;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File, OpenOptions, canonicalize};
 use std::hash::Hasher;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
@@ -16,9 +16,24 @@ use twox_hash::XxHash64;
 use fxhash;
 use crc32fast;
 
+/// A tag is a logical grouping of files (although it doesn't have to be).
+/// Furthermore, tags are the parent directory by which any sub files will be resolved.
+/// We have this so you can easily move/rename indexed files/subdirectories
+/// and so you don't have to deal with absolute file paths specific to a single computer/node
+/// from the dashboard/management console.
+/// These can be separate drives or root folders on which you would like to index
+/// 
+/// Do we also want to keep the items together by `file_size` sorted by
+/// another field like `hash_stopped_at`?
+pub struct Tag {
+    pub abs_path: String,
+    pub entries: HashMap<u64, Vec<IndexItem>>,
+    pub paths: HashMap<String, IndexItem>, // stores each file by path to look up/get file info in O(1)
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct IndexItem {
+    /// The file path relative to the path of the tag that contains this file
     pub file_path: String,
     pub file_size: u64,
     pub hash: u64,
@@ -43,18 +58,15 @@ impl IndexItem {
 
 /// Data structure representing the local file index
 /// on this node.
-/// 
-/// Do we also want to keep the items together by `file_size` sorted by
-/// another field like `hash_stopped_at`?
 #[derive(Serialize, Deserialize)]
 pub struct LocalIndex {
-    pub entries: HashMap<u64, Vec<IndexItem>>,
+    pub tags: Vec<Tag>,
 }
 
 impl LocalIndex {
     pub fn new() -> Self {
         LocalIndex {
-            entries: HashMap::new(),
+            tags: Vec::new(),
         }
     }
 
@@ -66,9 +78,9 @@ impl LocalIndex {
             for index_item in val {
                 let tuple = (index_item.hash, index_item.hash_stopped_at);
                 if set.contains(&tuple) {
-                    dups.push(index_item.to_owned());
+                    dups.push(index_item.clone());
                 } else {
-                    set.insert(tuple.to_owned());
+                    set.insert(tuple.clone());
                 }
             }
             if !dups.is_empty() {
@@ -79,6 +91,10 @@ impl LocalIndex {
     }
 
     pub fn index(&mut self, path: &str) {
+        if self.paths.contains_key(path) {
+            let abs_path = canonicalize(path);
+            // TODO check last updated, if it is newer than the one in the index, reindex
+        }
         let file = File::open(path).expect("Invalid file path");
         if file.metadata().unwrap().is_dir() {
             for entry_result in fs::read_dir(path).unwrap() {

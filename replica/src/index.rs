@@ -25,10 +25,97 @@ use crc32fast;
 /// 
 /// Do we also want to keep the items together by `file_size` sorted by
 /// another field like `hash_stopped_at`?
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Tag {
     pub abs_path: String,
+    pub name: String,
     pub entries: HashMap<u64, Vec<IndexItem>>,
     pub paths: HashMap<String, IndexItem>, // stores each file by path to look up/get file info in O(1)
+}
+
+impl Tag {
+    pub fn new(abs_path: &str, name: &str) -> Self {
+        Tag {
+            abs_path: abs_path.to_owned(),
+            name: name.to_owned(),
+            entries: HashMap::new(),
+            paths: HashMap::new(),
+        }
+    }
+
+    /// Gets redundancies within a tag
+    pub fn redundancies(&self) -> Vec<Vec<IndexItem>> {
+        let mut res = Vec::new();
+        for (key, val) in &self.entries {
+            let mut set = HashSet::new();
+            let mut dups = Vec::new();
+            for index_item in val {
+                let tuple = (index_item.hash, index_item.hash_stopped_at);
+                if set.contains(&tuple) {
+                    dups.push(index_item.clone());
+                } else {
+                    set.insert(tuple.clone());
+                }
+            }
+            if !dups.is_empty() {
+                res.push(dups);
+            }
+        }
+        res
+    }
+
+    pub fn index(&mut self, path: &str) {
+        let mut full_abs_path = self.abs_path.to_owned();
+        full_abs_path.push_str(path);
+        if self.paths.contains_key(&full_abs_path) {
+            let abs_path = canonicalize(&full_abs_path);
+            // TODO check last updated, if it is newer than the one in the index, reindex
+        }
+        println!("{}", full_abs_path);
+        let file = File::open(&full_abs_path).expect("Invalid file path");
+        if file.metadata().unwrap().is_dir() {
+            for entry_result in fs::read_dir(&full_abs_path).unwrap() {
+                let entry = entry_result.unwrap();
+                self.index_abs(&entry.path().to_string_lossy().to_string());
+            }
+        } else {
+            self.put(&IndexItem::new(path.to_owned()));
+        }
+    }
+
+    fn index_abs(&mut self, full_abs_path: &str) {
+        println!("{}", full_abs_path);
+        let file = File::open(&full_abs_path).expect("Invalid file path");
+        if file.metadata().unwrap().is_dir() {
+            for entry_result in fs::read_dir(&full_abs_path).unwrap() {
+                let entry = entry_result.unwrap();
+                self.index_abs(&entry.path().to_string_lossy().to_string());
+            }
+        } else {
+            self.put(&IndexItem::new(full_abs_path.to_owned()));
+        }
+    }
+
+    fn put(&mut self, index_item: &IndexItem) {
+        let size = index_item.file_size;
+        let contains = self.entries.contains_key(&size);
+        if !contains {
+            let mut v = Vec::new();
+            v.push(index_item.clone());
+            self.entries.insert(index_item.file_size, v);
+            return;
+        }
+        self.entries.get_mut(&size).unwrap().push(index_item.clone());
+        self.hash_all(size);
+    }
+
+    fn hash_all(&mut self, size: u64) {
+        for item in self.entries.get_mut(&size).unwrap() {
+            if item.hash_stopped_at == item.file_size { continue; }
+            item.hash = hash_file(&item.file_path);
+            item.hash_stopped_at = item.file_size;
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -70,40 +157,20 @@ impl LocalIndex {
         }
     }
 
-    pub fn redundancies(&self) -> Vec<Vec<IndexItem>> {
-        let mut res = Vec::new();
-        for (key, val) in &self.entries {
-            let mut set = HashSet::new();
-            let mut dups = Vec::new();
-            for index_item in val {
-                let tuple = (index_item.hash, index_item.hash_stopped_at);
-                if set.contains(&tuple) {
-                    dups.push(index_item.clone());
-                } else {
-                    set.insert(tuple.clone());
-                }
-            }
-            if !dups.is_empty() {
-                res.push(dups);
-            }
-        }
-        res
+    /// Creates a new tag in this index with name `tag_name` and path `tag_path`.
+    /// The path needs not be absolute
+    pub fn new_tag(&mut self, tag_name: &str, tag_path: &str) {
+        let canonicalized = canonicalize(tag_path).expect("Invalid path");
+        let abs_tag_path = canonicalized.to_str().unwrap();
+        let mut tag = Tag::new(abs_tag_path, tag_name);
+        println!("Creating tag '{}' at path {}", tag_name, abs_tag_path);
+        self.tags.push(tag.clone());
+        tag.index(""); // TODO add func like index_all or something in impl Tag{}
     }
 
-    pub fn index(&mut self, path: &str) {
-        if self.paths.contains_key(path) {
-            let abs_path = canonicalize(path);
-            // TODO check last updated, if it is newer than the one in the index, reindex
-        }
-        let file = File::open(path).expect("Invalid file path");
-        if file.metadata().unwrap().is_dir() {
-            for entry_result in fs::read_dir(path).unwrap() {
-                let entry = entry_result.unwrap();
-                self.index(&entry.path().to_string_lossy().to_string())
-            }
-        } else {
-            self.put(&IndexItem::new(path.to_string()))
-        }
+    /// Gets redundancies across tags
+    pub fn redundancies(&self) -> Vec<Vec<IndexItem>> {
+        unimplemented!()
     }
 
     pub fn from_local() -> Self {
@@ -155,27 +222,6 @@ impl LocalIndex {
 
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap()
-    }
-
-    fn put(&mut self, index_item: &IndexItem) {
-        let size = index_item.file_size;
-        let contains = self.entries.contains_key(&size);
-        if !contains {
-            let mut v = Vec::new();
-            v.push(index_item.clone());
-            self.entries.insert(index_item.file_size, v);
-            return;
-        }
-        self.entries.get_mut(&size).unwrap().push(index_item.clone());
-        self.hash_all(size);
-    }
-
-    fn hash_all(&mut self, size: u64) {
-        for item in self.entries.get_mut(&size).unwrap() {
-            if item.hash_stopped_at == item.file_size { continue; }
-            item.hash = hash_file(&item.file_path);
-            item.hash_stopped_at = item.file_size;
-        }
     }
 }
 

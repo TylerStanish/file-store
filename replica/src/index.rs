@@ -64,21 +64,35 @@ impl Tag {
         res
     }
 
-            // TODO check last updated, if it is newer than the one in the index, reindex,
-            // otherwise skip. If we get here, abs_path must point to a file so we don't
-            // need to recurse
-            // also check if the file even exists... it could have been deleted. in that case remove it from the index
     /// Index a tag at the top level recursively, so abs_path MUST point to a directory
     pub fn index(&mut self) {
         let mut full_abs_path = self.abs_path.to_owned();
-        let mut visited = HashSet::new(); // we need this to keep track of deleted files
+        let mut visited: HashSet<String> = HashSet::new(); // we need this to keep track of deleted files
         println!("{}", full_abs_path);
         let file = File::open(&full_abs_path).unwrap();
         assert!(file.metadata().unwrap().is_dir());
+        // first take care of the deleted items by traversing the index
+        // here you can also take care of the modified files and the files that stay the same
+        for (path, index_item) in self.paths {
+            match index_item.file_changed_event() {
+                FileChangeEvent::Deleted => unimplemented!(),// remove from the index (remember self.entries and self.paths)
+                FileChangeEvent::Modified => unimplemented!(),// check the size of the new file, and remove from self.entries[size] if necessary
+                FileChangeEvent::NoChange => (),
+                FileChangeEvent::Created => panic!("A file was claimed to be created when it was already in the index"),
+            }
+        }
+        // now you must find the newly created files by traversing the file system
         for entry_result in fs::read_dir(&full_abs_path).unwrap() {
             let entry = entry_result.unwrap();
             self.index_abs(&entry.path().to_string_lossy().to_string());
         }
+        let diff = self.paths.keys().cloned().collect::<HashSet<String>>().difference(&visited);
+        // these are the files that were deleted (not present on current traversal of the file system, but in the index)
+        // remove these items in diff from the index
+        // we can find the difference like this, or we can traverse the map of index items and check each index item...
+        // well we need to do both because some files may have been deleted (not present in file system currently)
+        // but some files have been created too (not present in the index). Either way we need to traverse the file system
+        // as well as the index to look for changes
     }
 
     fn index_abs(&mut self, full_abs_path: &str) {

@@ -66,7 +66,7 @@ impl Tag {
 
     /// Index a tag at the top level recursively, so abs_path MUST point to a directory
     pub fn index(&mut self) {
-        let mut full_abs_path = self.abs_path.to_owned();
+        let full_abs_path = self.abs_path.to_owned();
         let file = File::open(&full_abs_path).unwrap();
         assert!(file.metadata().unwrap().is_dir());
         // first take care of the deleted items by traversing the index
@@ -322,74 +322,76 @@ pub fn hash_file<P: AsRef<Path> + Debug>(path: &P) -> u64 {
 mod test {
     use std::io::Write;
     use tempfile;
-    use super::LocalIndex;
+    use super::{LocalIndex, Tag};
     #[test]
-    fn smoke_test_empty_dir() {
+    fn smoke_test_single_empty_tag() {
         let dir = tempfile::tempdir().unwrap();
         let mut index = LocalIndex::new();
-        index.index(dir.path().to_str().unwrap());
-        assert_eq!(index.entries.len(), 0);
+        index.new_tag("vids", "./vids");
+        assert_eq!(index.tags.len(), 1);
     }
 
     #[test]
-    fn test_single_file() {
+    fn test_simple_tag_with_one_file() {
         let dir = tempfile::tempdir().unwrap();
         let file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
-        let mut index = LocalIndex::new();
-        index.index(file.path().to_str().unwrap());
-        assert_eq!(index.entries.len(), 1);
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&0].len(), 1);
     }
 
     #[test]
     fn test_files_no_collision() {
         let dir = tempfile::tempdir().unwrap();
-        let mut index = LocalIndex::new();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
         let mut files = Vec::new();
         for size in 0..5 {
             let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
             let buf = vec![42; size];
             file.write(&buf).unwrap();
-            index.index(file.path().to_str().unwrap());
             files.push(file); // if we don't do this, drop() is called and will destroy the file, so we need to move it into the vec
         }
-        assert_eq!(index.entries.len(), 5);
+        tag.index();
+        assert_eq!(tag.entries.len(), 5);
+        assert_eq!(tag.paths.len(), 5);
         for size in 0..5 {
-            assert_eq!(index.entries.get(&size).unwrap().len(), 1);
+            assert_eq!(tag.entries.get(&size).unwrap().len(), 1);
         }
     }
 
     #[test]
     fn test_files_single_collision() {
         let dir = tempfile::tempdir().unwrap();
-        let mut index = LocalIndex::new();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
         let mut file1 = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
         let mut file2 = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
         let buf = vec![42; 1];
         file1.write(&buf).unwrap();
         file2.write(&buf).unwrap();
-        index.index(file1.path().to_str().unwrap());
-        index.index(file2.path().to_str().unwrap());
+        tag.index();
 
-        assert_eq!(index.entries.len(), 1);
-        assert_eq!(index.entries.get(&1).unwrap().len(), 2);
-        assert_eq!(index.entries.get(&1).unwrap()[0].hash_stopped_at, 1);
+        assert_eq!(tag.entries.len(), 1);
+        assert_eq!(tag.paths.len(), 2);
+        assert_eq!(tag.entries.get(&1).unwrap().len(), 2);
+        assert_eq!(tag.entries.get(&1).unwrap()[0].hash_stopped_at, 1);
     }
 
     #[test]
     fn test_files_many_collisions() {
         let dir = tempfile::tempdir().unwrap();
-        let mut index = LocalIndex::new();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
         let mut files = Vec::new();
         for _ in 0..5 {
             let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
             let buf = vec![42; 42];
             file.write(&buf).unwrap();
-            index.index(file.path().to_str().unwrap());
             files.push(file);
         }
-        assert_eq!(index.entries.len(), 1);
-        assert_eq!(index.entries.get(&42).unwrap().len(), 5);
-        for item in index.entries.get(&42).unwrap() {
+        tag.index();
+        assert_eq!(tag.entries.len(), 1);
+        assert_eq!(tag.paths.len(), 5);
+        assert_eq!(tag.entries.get(&42).unwrap().len(), 5);
+        for item in tag.entries.get(&42).unwrap() {
             assert_eq!(item.hash_stopped_at, 42);
         }
     }

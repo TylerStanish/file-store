@@ -34,7 +34,7 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub fn new(abs_path: &str, name: &str) -> Self {
+    pub fn new(name: &str, abs_path: &str) -> Self {
         Tag {
             abs_path: abs_path.to_owned(),
             name: name.to_owned(),
@@ -127,9 +127,11 @@ impl Tag {
             let mut v = Vec::new();
             v.push(index_item.clone());
             self.entries.insert(index_item.file_size, v);
+            self.paths.insert(index_item.absolute_path(), index_item.clone());
             return;
         }
         self.entries.get_mut(&size).unwrap().push(index_item.clone());
+        self.paths.insert(index_item.absolute_path(), index_item.clone());
         self.hash_all(size);
     }
 
@@ -336,6 +338,7 @@ mod test {
         let dir = tempfile::tempdir().unwrap();
         let file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
         let mut tag = Tag::new("test", dir.path().to_str().unwrap());
+        tag.index();
         assert_eq!(tag.paths.len(), 1);
         assert_eq!(tag.entries[&0].len(), 1);
     }

@@ -3,7 +3,7 @@ use std::env;
 use std::fmt::Debug;
 use std::fs::{self, File, OpenOptions, canonicalize};
 use std::hash::Hasher;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Write, ErrorKind};
 use std::path::Path;
 use std::time::SystemTime;
 use inotify::{
@@ -64,22 +64,20 @@ impl Tag {
         res
     }
 
-    pub fn index(&mut self, path: &str) {
+            // TODO check last updated, if it is newer than the one in the index, reindex,
+            // otherwise skip. If we get here, abs_path must point to a file so we don't
+            // need to recurse
+            // also check if the file even exists... it could have been deleted. in that case remove it from the index
+    /// Index a tag at the top level recursively, so abs_path MUST point to a directory
+    pub fn index(&mut self) {
         let mut full_abs_path = self.abs_path.to_owned();
-        full_abs_path.push_str(path);
-        if self.paths.contains_key(&full_abs_path) {
-            let abs_path = canonicalize(&full_abs_path);
-            // TODO check last updated, if it is newer than the one in the index, reindex
-        }
+        let mut visited = HashSet::new(); // we need this to keep track of deleted files
         println!("{}", full_abs_path);
-        let file = File::open(&full_abs_path).expect("Invalid file path");
-        if file.metadata().unwrap().is_dir() {
-            for entry_result in fs::read_dir(&full_abs_path).unwrap() {
-                let entry = entry_result.unwrap();
-                self.index_abs(&entry.path().to_string_lossy().to_string());
-            }
-        } else {
-            self.put(&IndexItem::new(path.to_owned()));
+        let file = File::open(&full_abs_path).unwrap();
+        assert!(file.metadata().unwrap().is_dir());
+        for entry_result in fs::read_dir(&full_abs_path).unwrap() {
+            let entry = entry_result.unwrap();
+            self.index_abs(&entry.path().to_string_lossy().to_string());
         }
     }
 
@@ -96,7 +94,12 @@ impl Tag {
         }
     }
 
+    /// Assumes the `index_item` is not already in the index
     fn put(&mut self, index_item: &IndexItem) {
+        if self.paths.contains_key(&index_item.file_path) {
+            // check if file changed, if so, re-index
+            return;
+        }
         let size = index_item.file_size;
         let contains = self.entries.contains_key(&size);
         if !contains {
@@ -118,6 +121,13 @@ impl Tag {
     }
 }
 
+pub enum FileChangeEvent {
+    Modified,
+    Deleted,
+    Created,
+    NoChange,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct IndexItem {
     /// The file path relative to the path of the tag that contains this file
@@ -126,10 +136,11 @@ pub struct IndexItem {
     pub hash: u64,
     pub hash_stopped_at: u64,
     pub last_modified: SystemTime,
+    pub tag: Tag,
 }
 
 impl IndexItem {
-    pub fn new(file_path: String) -> Self {
+    pub fn new(file_path: String, tag: &Tag) -> Self {
         let file = File::open(&file_path).expect("Invalid file path");
         let metadata = file.metadata().unwrap();
         assert_eq!(metadata.is_file(), true);
@@ -139,6 +150,27 @@ impl IndexItem {
             hash: 0,
             hash_stopped_at: 0,
             last_modified: metadata.modified().expect("Your OS does not support 'last modified' metadata"),
+            tag: tag.clone(),
+        }
+    }
+
+    pub fn absolute_path(&self) -> String {
+        Path::new(&self.tag.abs_path).join(self.file_path).to_str().unwrap().to_owned()
+    }
+
+    /// The status of the file since last indexing
+    pub fn file_changed_event(&self) -> FileChangeEvent {
+        match File::open(self.absolute_path()) {
+            Ok(file) => {
+                if file.metadata().unwrap().modified().unwrap() <= self.last_modified {
+                    return FileChangeEvent::Modified;
+                } else {
+                    return FileChangeEvent::NoChange;
+                }
+            }
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => return FileChangeEvent::Deleted
+            }
         }
     }
 }
@@ -165,11 +197,17 @@ impl LocalIndex {
         let mut tag = Tag::new(abs_tag_path, tag_name);
         println!("Creating tag '{}' at path {}", tag_name, abs_tag_path);
         self.tags.push(tag.clone());
-        tag.index(""); // TODO add func like index_all or something in impl Tag{}
+        tag.index(); // TODO add func like index_all or something in impl Tag{}
     }
 
     /// Gets redundancies across tags
     pub fn redundancies(&self) -> Vec<Vec<IndexItem>> {
+        unimplemented!()
+    }
+
+    /// Finds identical files to the one found at `path`. `path` can be found
+    /// anywhere, not necessarily as a child of a indexed tag
+    pub fn find_matching(&self, path: &str) -> Vec<IndexItem> {
         unimplemented!()
     }
 

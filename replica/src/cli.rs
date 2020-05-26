@@ -8,7 +8,7 @@ pub fn run_cli() {
         while let Some(dir) = matches.next() {
             let tag_name = dir;
             let root_path = matches.next().unwrap(); // clap should guarantee each occurrence has 2 values
-            local_index.new_tag(root_path, tag_name);
+            local_index.new_tag(tag_name, root_path);
         }
         local_index.persist_local();
         //println!("{:?}", local_index.redundancies());

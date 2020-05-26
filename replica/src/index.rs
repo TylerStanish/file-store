@@ -30,7 +30,7 @@ pub struct Tag {
     pub abs_path: String,
     pub name: String,
     pub entries: HashMap<u64, Vec<IndexItem>>,
-    pub paths: HashMap<String, IndexItem>, // stores each file by path to look up/get file info in O(1)
+    pub paths: HashMap<String, IndexItem>, // stores each file by path to look up/get file info in O(1). Stores abs file path
 }
 
 impl Tag {
@@ -67,16 +67,30 @@ impl Tag {
     /// Index a tag at the top level recursively, so abs_path MUST point to a directory
     pub fn index(&mut self) {
         let mut full_abs_path = self.abs_path.to_owned();
-        let mut visited: HashSet<String> = HashSet::new(); // we need this to keep track of deleted files
-        println!("{}", full_abs_path);
         let file = File::open(&full_abs_path).unwrap();
         assert!(file.metadata().unwrap().is_dir());
         // first take care of the deleted items by traversing the index
         // here you can also take care of the modified files and the files that stay the same
-        for (path, index_item) in self.paths {
+        for (path, index_item) in self.paths.clone() { // we want to clone so we can modify this while in the for loop
             match index_item.file_changed_event() {
-                FileChangeEvent::Deleted => unimplemented!(),// remove from the index (remember self.entries and self.paths)
-                FileChangeEvent::Modified => unimplemented!(),// check the size of the new file, and remove from self.entries[size] if necessary
+                FileChangeEvent::Deleted => {
+                    // remove from the index (remember self.entries and self.paths)
+                    let item = self.paths.remove(&path).unwrap();
+                    let pos = self.entries[&item.file_size].iter().position(|ii| ii.file_path == item.file_path).unwrap();
+                    self.entries.get_mut(&item.file_size).unwrap().remove(pos);
+                },
+                FileChangeEvent::Modified => {
+                    // check the size of the file, and remove from self.entries[size] and insert into new key's vec (and hash) if necessary
+                    let new_size = File::open(path).unwrap().metadata().unwrap().len();
+                    if index_item.file_size != new_size {
+                        let pos = self.entries[&index_item.file_size].iter().position(|ii| ii.file_path == index_item.file_path).unwrap();
+                        self.entries.get_mut(&index_item.file_size).unwrap().remove(pos);
+                        self.put(&IndexItem::new(index_item.file_path, self));
+                    } else {
+                        // even though the size of the file is the same, it doesn't mean it wasn't modified. Re-hash anyways
+                        self.hash_all(new_size);
+                    }
+                },
                 FileChangeEvent::NoChange => (),
                 FileChangeEvent::Created => panic!("A file was claimed to be created when it was already in the index"),
             }
@@ -84,19 +98,16 @@ impl Tag {
         // now you must find the newly created files by traversing the file system
         for entry_result in fs::read_dir(&full_abs_path).unwrap() {
             let entry = entry_result.unwrap();
-            self.index_abs(&entry.path().to_string_lossy().to_string());
+            let path_string = entry.path().to_string_lossy().to_string();
+            if self.paths.contains_key(&path_string) {
+                continue;
+            }
+            self.index_abs(&path_string);
         }
-        let diff = self.paths.keys().cloned().collect::<HashSet<String>>().difference(&visited);
-        // these are the files that were deleted (not present on current traversal of the file system, but in the index)
-        // remove these items in diff from the index
-        // we can find the difference like this, or we can traverse the map of index items and check each index item...
-        // well we need to do both because some files may have been deleted (not present in file system currently)
-        // but some files have been created too (not present in the index). Either way we need to traverse the file system
-        // as well as the index to look for changes
     }
 
     fn index_abs(&mut self, full_abs_path: &str) {
-        println!("{}", full_abs_path);
+        println!("Indexing: {}", full_abs_path);
         let file = File::open(&full_abs_path).expect("Invalid file path");
         if file.metadata().unwrap().is_dir() {
             for entry_result in fs::read_dir(&full_abs_path).unwrap() {
@@ -104,16 +115,12 @@ impl Tag {
                 self.index_abs(&entry.path().to_string_lossy().to_string());
             }
         } else {
-            self.put(&IndexItem::new(full_abs_path.to_owned()));
+            self.put(&IndexItem::new(full_abs_path.to_owned(), self));
         }
     }
 
     /// Assumes the `index_item` is not already in the index
     fn put(&mut self, index_item: &IndexItem) {
-        if self.paths.contains_key(&index_item.file_path) {
-            // check if file changed, if so, re-index
-            return;
-        }
         let size = index_item.file_size;
         let contains = self.entries.contains_key(&size);
         if !contains {
@@ -128,10 +135,14 @@ impl Tag {
 
     fn hash_all(&mut self, size: u64) {
         for item in self.entries.get_mut(&size).unwrap() {
-            if item.hash_stopped_at == item.file_size { continue; }
+            if item.hash_stopped_at == item.file_size && !Self::modified_since_last_index(item) { continue; }
             item.hash = hash_file(&item.file_path);
             item.hash_stopped_at = item.file_size;
         }
+    }
+
+    fn modified_since_last_index(item: &IndexItem) -> bool {
+        return File::open(&item.file_path).unwrap().metadata().unwrap().modified().unwrap() <= item.last_modified;
     }
 }
 
@@ -151,6 +162,7 @@ pub struct IndexItem {
     pub hash_stopped_at: u64,
     pub last_modified: SystemTime,
     pub tag: Tag,
+    //pub tag_name: String,
 }
 
 impl IndexItem {
@@ -169,7 +181,7 @@ impl IndexItem {
     }
 
     pub fn absolute_path(&self) -> String {
-        Path::new(&self.tag.abs_path).join(self.file_path).to_str().unwrap().to_owned()
+        Path::new(&self.tag.abs_path).join(&self.file_path).to_str().unwrap().to_owned()
     }
 
     /// The status of the file since last indexing
@@ -183,7 +195,8 @@ impl IndexItem {
                 }
             }
             Err(e) => match e.kind() {
-                ErrorKind::NotFound => return FileChangeEvent::Deleted
+                ErrorKind::NotFound => return FileChangeEvent::Deleted,
+                err => panic!("Unexpected std::io::ErrorKind {:?}", err),
             }
         }
     }

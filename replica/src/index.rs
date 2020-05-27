@@ -357,6 +357,20 @@ mod test {
     }
 
     #[test]
+    fn test_simple_reindex_deletion() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
+        tag.index();
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&0].len(), 1);
+        file.close().unwrap();
+        tag.index();
+        assert_eq!(tag.paths.len(), 0);
+        assert_eq!(tag.entries[&0].len(), 0);
+    }
+
+    #[test]
     fn test_simple_reindex_modified_with_same_size_but_different_content() {
         let dir = tempfile::tempdir().unwrap();
         let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();

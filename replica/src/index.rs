@@ -373,6 +373,25 @@ mod test {
     }
 
     #[test]
+    fn test_reindex_modified_with_different_initial_size_and_different_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut file1 = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut file2 = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
+        file1.write(&[42]).unwrap();
+        tag.index();
+        assert_eq!(tag.paths.len(), 2);
+        assert_eq!(tag.entries[&0].len(), 1);
+        assert_eq!(tag.entries[&1].len(), 1);
+        file2.write(&[43]).unwrap();
+        tag.index();
+        assert_eq!(tag.paths.len(), 2);
+        assert_eq!(tag.entries[&1].len(), 2);
+
+        assert_ne!(tag.entries[&1][0].hash, tag.entries[&1][1].hash);
+    }
+
+    #[test]
     fn test_simple_reindex_modified_with_new_size() {
         let dir = tempfile::tempdir().unwrap();
         let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();

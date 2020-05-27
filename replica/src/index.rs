@@ -322,7 +322,7 @@ pub fn hash_file<P: AsRef<Path> + Debug>(path: &P) -> u64 {
 
 #[cfg(test)]
 mod test {
-    use std::io::Write;
+    use std::io::{Write, SeekFrom, Seek};
     use tempfile;
     use super::{LocalIndex, Tag};
     #[test]
@@ -341,6 +341,49 @@ mod test {
         tag.index();
         assert_eq!(tag.paths.len(), 1);
         assert_eq!(tag.entries[&0].len(), 1);
+    }
+
+    #[test]
+    fn test_simple_reindex_no_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
+        tag.index();
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&0].len(), 1);
+        tag.index();
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&0].len(), 1);
+    }
+
+    #[test]
+    fn test_simple_reindex_modified_with_same_size_but_different_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
+        file.write(&[42]).unwrap();
+        tag.index();
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&1].len(), 1);
+        file.seek(SeekFrom::Start(0)).unwrap();
+        file.write(&[43]).unwrap();
+        tag.index();
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&1].len(), 1);
+    }
+
+    #[test]
+    fn test_simple_reindex_modified_with_new_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut file = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        let mut tag = Tag::new("test", dir.path().to_str().unwrap());
+        tag.index();
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&0].len(), 1);
+        file.write(&[42]).unwrap();
+        tag.index();
+        assert_eq!(tag.paths.len(), 1);
+        assert_eq!(tag.entries[&1].len(), 1);
     }
 
     #[test]

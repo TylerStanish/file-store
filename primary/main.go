@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,14 +12,7 @@ import (
 )
 
 func setupDB() *sql.DB {
-	db, err := sql.Open("postgres", fmt.Sprintf(
-		"user=%s host=%s dbname=%s password=%s port=%s sslmode=disable", // TODO lol please change sslmode
-		os.Getenv("DBUSER"),
-		os.Getenv("DBHOST"),
-		os.Getenv("DBNAME"),
-		os.Getenv("DBPASS"),
-		os.Getenv("DBPORT"),
-	))
+	db, err := sql.Open("postgres", os.Getenv("POSTGRESQL_URL"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,5 +33,5 @@ func main() {
 	http.HandleFunc("/auth/register", server.HandleRegister)
 	http.HandleFunc("/tag", server.HandleTag)
 	http.HandleFunc("/node", server.HandleNode)
-	http.ListenAndServe(":3000", nil)
+	http.ListenAndServe(":8080", nil)
 }

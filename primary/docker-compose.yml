@@ -1,0 +1,15 @@
+version: "3"
+services:
+  primary:
+    depends_on:
+      - postgres
+    build: ./
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./:/go/src/github.com/app
+    command: bash -c 'while !</dev/tcp/postgres/5432; do sleep 1; done; CompileDaemon --build="go build -o run" --command="./run"'
+    environment:
+      - POSTGRESQL_URL=user=postgres host=postgres dbname=postgres port=5432 sslmode=disable
+  postgres:
+    image: 'postgres'

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 )
 
 type LoginRequest struct {
@@ -55,7 +58,28 @@ func handleRegister(w http.ResponseWriter, req *http.Request) {}
 func handleTag(w http.ResponseWriter, req *http.Request)      {}
 func handleNode(w http.ResponseWriter, req *http.Request)     {}
 
+func setupDB() *sql.DB {
+	db, err := sql.Open("postgres", fmt.Sprintf(
+		"user=%s host=%s dbname=%s password=%s port=%s sslmode=disable", // TODO lol please change sslmode
+		os.Getenv("DBUSER"),
+		os.Getenv("DBHOST"),
+		os.Getenv("DBNAME"),
+		os.Getenv("DBPASS"),
+		os.Getenv("DBPORT"),
+	))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := db.Ping(); err != nil {
+		log.Fatal(err)
+	}
+	return db
+}
+
 func main() {
+	db := setupDB()
+	defer db.Close()
+
 	http.HandleFunc("/auth/login", handleLogin)
 	http.HandleFunc("/auth/register", handleRegister)
 	http.HandleFunc("/tag", handleTag)

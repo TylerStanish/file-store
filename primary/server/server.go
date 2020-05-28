@@ -23,7 +23,7 @@ func NewServer(db *sql.DB) *Server {
 	}
 }
 
-func (s *Server) HandleLogin(w http.ResponseWriter, req *http.Request) {
+func (s *Server) HandleRegister(w http.ResponseWriter, req *http.Request) {
 	if req.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -40,6 +40,6 @@ func (s *Server) HandleLogin(w http.ResponseWriter, req *http.Request) {
 	w.Write(bytes)
 }
 
-func (s *Server) HandleRegister(w http.ResponseWriter, req *http.Request) {}
-func (s *Server) HandleTag(w http.ResponseWriter, req *http.Request)      {}
-func (s *Server) HandleNode(w http.ResponseWriter, req *http.Request)     {}
+func (s *Server) HandleLogin(w http.ResponseWriter, req *http.Request) {}
+func (s *Server) HandleTag(w http.ResponseWriter, req *http.Request)   {}
+func (s *Server) HandleNode(w http.ResponseWriter, req *http.Request)  {}

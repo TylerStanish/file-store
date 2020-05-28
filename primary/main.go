@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/tylerstanish/file-store/server"
+
+	_ "github.com/lib/pq"
 )
 
 func setupDB() *sql.DB {
@@ -29,6 +31,7 @@ func setupDB() *sql.DB {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	db := setupDB()
 	defer db.Close()
 

@@ -23,7 +23,11 @@ func profileCols() string {
 
 func (m *AuthService) Login(req schemas.LoginRequest) *Profile {
 	profile := Profile{}
-	err := m.DBClient.QueryRow(fmt.Sprintf("select %s from profile", profileCols())).Scan(&profile.Username, &profile.Password)
+	err := m.DBClient.QueryRow(
+		fmt.Sprintf("insert into profile (username, password) values ($1, $2) returning %s", profileCols()),
+		profile.Username,
+		profile.Password,
+	).Scan(&profile.Username, &profile.Password)
 	if err != nil {
 		log.Fatal(err)
 	}

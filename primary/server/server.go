@@ -32,8 +32,8 @@ func (s *Server) HandleLogin(w http.ResponseWriter, req *http.Request) {
 	if !utils.ReadBodyInto(req.Body, &reqBody, w) {
 		return
 	}
-	s.AuthService.Login(reqBody)
-	bytes, err := json.Marshal(reqBody)
+	profile := s.AuthService.Login(reqBody)
+	bytes, err := json.Marshal(profile)
 	if err != nil {
 		log.Fatal(err)
 	}

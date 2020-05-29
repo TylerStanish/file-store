@@ -21,13 +21,17 @@ func profileCols() string {
 	return "username, password"
 }
 
+func profileFields(p *Profile) []interface{} {
+	return []interface{}{&p.Username, &p.Password}
+}
+
 func (m *AuthService) Login(req schemas.LoginRequest) *Profile {
 	profile := Profile{}
 	err := m.DBClient.QueryRow(
 		fmt.Sprintf("insert into profile (username, password) values ($1, $2) returning %s", profileCols()),
-		profile.Username,
-		profile.Password,
-	).Scan(&profile.Username, &profile.Password)
+		req.Username,
+		req.Password,
+	).Scan(profileFields(&profile)...)
 	if err != nil {
 		log.Fatal(err)
 	}

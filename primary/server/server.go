@@ -24,7 +24,7 @@ func NewServer(db *sql.DB) *Server {
 }
 
 func (s *Server) HandleRegister(w http.ResponseWriter, req *http.Request) {
-	if req.Method != "GET" {
+	if req.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}

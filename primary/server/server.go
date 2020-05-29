@@ -17,7 +17,7 @@ type Route = func(http.ResponseWriter, *http.Request)
 
 func (s *Server) RequireAuthentication(next func(w http.ResponseWriter, req *http.Request)) Route {
 	return func(r http.ResponseWriter, req *http.Request) {
-		authHeader := r.Header().Get("Authorization")
+		authHeader := req.Header.Get("Authorization")
 		if authHeader == "" {
 			r.WriteHeader(http.StatusBadRequest)
 			return
@@ -42,6 +42,10 @@ func NewServer(db *sql.DB) *Server {
 }
 
 func (s *Server) HandleTag(w http.ResponseWriter, req *http.Request) {
+	if req.Method == "GET" {
+		w.Write([]byte("hi"))
+		return
+	}
 	if req.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return

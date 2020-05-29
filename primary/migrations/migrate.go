@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -19,13 +20,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	stmt, err := db.Prepare(string(bytes))
-	if err != nil {
-		log.Fatal(err)
+	sql := string(bytes)
+	// we can only run one sql command at a time
+	for _, command := range strings.Split(sql, ";") {
+		stmt, err := db.Prepare(command)
+		if err != nil {
+			log.Fatal(err)
+		}
+		_, err = stmt.Exec()
+		if err != nil {
+			log.Fatal(err)
+		}
+		stmt.Close()
 	}
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Fatal(err)
-	}
-	stmt.Close()
 }

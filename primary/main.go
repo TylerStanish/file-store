@@ -29,7 +29,7 @@ func main() {
 
 	server := server.NewServer(db)
 
-	http.HandleFunc("/tag", server.HandleTag)
-	http.HandleFunc("/node", server.HandleNode)
+	http.HandleFunc("/tag", server.RequireAuthentication(server.HandleTag))
+	http.HandleFunc("/node", server.RequireAuthentication(server.HandleNode))
 	http.ListenAndServe(":8080", nil)
 }

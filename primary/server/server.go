@@ -28,11 +28,11 @@ func (s *Server) HandleRegister(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	reqBody := schemas.LoginRequest{}
+	reqBody := schemas.RegisterRequest{}
 	if !utils.ReadBodyInto(req.Body, &reqBody, w) {
 		return
 	}
-	profile := s.AuthService.Login(reqBody)
+	profile := s.AuthService.Register(reqBody)
 	bytes, err := json.Marshal(profile)
 	if err != nil {
 		log.Fatal(err)

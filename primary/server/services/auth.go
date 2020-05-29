@@ -6,56 +6,35 @@ import (
 	"log"
 	"time"
 
-	"github.com/tylerstanish/file-store/server/schemas"
+	"github.com/google/uuid"
 )
 
 type AuthService struct {
 	DBClient *sql.DB
 }
 
-type Profile struct {
-	Username string
-	Password string
-}
-
-func profileCols() string {
-	return "username, password"
-}
-
-func profileFields(p *Profile) []interface{} {
-	return []interface{}{&p.Username, &p.Password}
-}
-
 type Token struct {
-	Token     string
-	IssuedAt  time.Time
-	ProfileId int
+	Token    string
+	IssuedAt time.Time
 }
 
 func tokenCols() string {
-	return "token, issued_at, profile_id"
+	return "token, issued_at"
 }
 
 func tokenFields(t *Token) []interface{} {
-	return []interface{}{&t.Token, &t.IssuedAt, &t.ProfileId}
+	return []interface{}{&t.Token, &t.IssuedAt}
 }
 
-func (m *AuthService) Register(req schemas.RegisterRequest) *Profile {
-	profile := Profile{}
+func (m *AuthService) CreateApiKey() *Token {
+	token := Token{}
+	tokStr := uuid.New().Value
 	err := m.DBClient.QueryRow(
-		fmt.Sprintf("insert into profile (username, password) values ($1, $2) returning %s", profileCols()),
-		req.Username,
-		req.Password,
-	).Scan(profileFields(&profile)...)
+		fmt.Sprintf("insert into token (token) values ($1) returning %s", tokenCols()),
+		tokStr,
+	).Scan(tokenFields(&token)...)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &profile
-}
-
-func (m *AuthService) Login(req schemas.RegisterRequest) *Token {
-	token := Token{}
-	err := m.DBClient.QueryRow(
-		fmt.Sprintf("select * from ")
-	)
+	return &token
 }

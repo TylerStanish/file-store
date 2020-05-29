@@ -29,8 +29,6 @@ func main() {
 
 	server := server.NewServer(db)
 
-	http.HandleFunc("/auth/login", server.HandleLogin)
-	http.HandleFunc("/auth/register", server.HandleRegister)
 	http.HandleFunc("/tag", server.HandleTag)
 	http.HandleFunc("/node", server.HandleNode)
 	http.ListenAndServe(":8080", nil)

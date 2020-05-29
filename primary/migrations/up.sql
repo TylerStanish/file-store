@@ -1,16 +1,9 @@
 begin;
 
-create table profile (
-  id serial primary key,
-  username text unique not null,
-  password text not null
-);
-
 create table token (
   id serial primary key,
   token text unique not null,
-  issued_at timestamptz not null,
-  profile_id int references profile(id) not null
+  issued_at timestamptz not null default current_timestamp
 );
 
 create table permission (

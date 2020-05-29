@@ -2,13 +2,9 @@ package server
 
 import (
 	"database/sql"
-	"encoding/json"
-	"log"
 	"net/http"
 
-	"github.com/tylerstanish/file-store/server/schemas"
 	"github.com/tylerstanish/file-store/server/services"
-	"github.com/tylerstanish/file-store/server/utils"
 )
 
 type Server struct {
@@ -23,23 +19,5 @@ func NewServer(db *sql.DB) *Server {
 	}
 }
 
-func (s *Server) HandleRegister(w http.ResponseWriter, req *http.Request) {
-	if req.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	reqBody := schemas.RegisterRequest{}
-	if !utils.ReadBodyInto(req.Body, &reqBody, w) {
-		return
-	}
-	profile := s.AuthService.Register(reqBody)
-	bytes, err := json.Marshal(profile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	w.Write(bytes)
-}
-
-func (s *Server) HandleLogin(w http.ResponseWriter, req *http.Request) {}
-func (s *Server) HandleTag(w http.ResponseWriter, req *http.Request)   {}
-func (s *Server) HandleNode(w http.ResponseWriter, req *http.Request)  {}
+func (s *Server) HandleTag(w http.ResponseWriter, req *http.Request)  {}
+func (s *Server) HandleNode(w http.ResponseWriter, req *http.Request) {}

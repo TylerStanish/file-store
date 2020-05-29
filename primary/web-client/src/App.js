@@ -1,25 +1,30 @@
 import React from 'react';
-import logo from './logo.svg';
+import { Button, TextField } from '@material-ui/core'
 import './App.css';
 
+import 'typeface-roboto';
+
+function submit(token) {
+  console.log(token)
+}
+
 function App() {
+  const [token, setToken] = React.useState('')
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <section style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+      <form>
+        <TextField type='password' placeholder='Token or password' label='Token or password' value={token} onChange={e => {
+          e.preventDefault()
+          setToken(e.target.value)
+        }}/>
+        <br/>
+        <br/>
+        <Button fullWidth type='submit' variant='contained' color='primary' onClick={e => {
+          e.preventDefault()
+          submit()
+        }}>Login</Button>
+      </form>
+    </section>
   );
 }
 
